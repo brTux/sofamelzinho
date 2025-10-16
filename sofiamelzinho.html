@@ -13,9 +13,19 @@
         p { font-size: 1em; color: #606770; }
     </style>
     <script>
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src='https://connect.facebook.net/en_US/fbevents.js';s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script');
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>A preparar o seu acesso...</h1>
+        <p>Aguarde um momento, estamos a redirecioná-lo em segurança.</p>
+    </div>
+    <script>
         const API_BASE_URL = 'https://novaapi-one.vercel.app';
         const SELLER_API_KEY = '359cdcf2-bb3c-4451-8d4e-fc5253c187a4';
-        const PRESSEL_ID = 117;
+        const PRESSEL_ID = 128;
         const TELEGRAM_USERNAME = 'Sofiamelzinho_bot';
         const WHITE_PAGE_URL = 'https://g1.globo.com/';
         const PIXELS_TO_TRACK = [
@@ -25,7 +35,6 @@
 ];
 
         const isBot = () => /bot|facebook|crawler|spider|preview/i.test(navigator.userAgent);
-        const isMobile = () => /android|iphone|ipad|ipod/i.test(navigator.userAgent);
         const getCookie = (name) => document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))?.[2] || null;
 
         async function registerAndRedirect() {
@@ -60,9 +69,9 @@
                 window.location.replace(WHITE_PAGE_URL);
             }
         }
-
-        function waitForFbCookiesAndRedirect() {
-            if (isBot() || !isMobile()) {
+        
+        function startFlow() {
+            if (isBot()) {
                 window.location.replace(WHITE_PAGE_URL);
                 return;
             }
@@ -78,21 +87,11 @@
                 attempts++;
             }, 200);
         }
-        
-        window.onload = waitForFbCookiesAndRedirect;
-    </script>
-    <script>
-        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src='https://connect.facebook.net/en_US/fbevents.js';s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script');
+
         PIXELS_TO_TRACK.forEach(p => { fbq('init', p.id); });
         fbq('track', 'PageView');
+        startFlow();
     </script>
     <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1174418164581996&ev=PageView&noscript=1"/></noscript>
-</head>
-<body>
-    <div class="container">
-        <div class="spinner"></div>
-        <h1>A preparar o seu acesso...</h1>
-        <p>Aguarde um momento, estamos a redirecioná-lo em segurança.</p>
-    </div>
 </body>
 </html>
