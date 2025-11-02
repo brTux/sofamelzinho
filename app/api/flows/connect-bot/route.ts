@@ -15,16 +15,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing workspaceId or botToken" }, { status: 400 })
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    let appUrl = process.env.NEXT_PUBLIC_APP_URL
+
     if (!appUrl) {
-      console.error("[v0] NEXT_PUBLIC_APP_URL environment variable is not set")
-      return NextResponse.json(
-        {
-          error:
-            "Server configuration error: NEXT_PUBLIC_APP_URL not set. Please configure the environment variable in your Vercel project settings.",
-        },
-        { status: 500 },
-      )
+      // Auto-detect from request headers (works in preview and production)
+      const protocol = request.headers.get("x-forwarded-proto") || "https"
+      const host = request.headers.get("x-forwarded-host") || request.headers.get("host")
+
+      if (host) {
+        appUrl = `${protocol}://${host}`
+        console.log("[v0] Auto-detected app URL from request:", appUrl)
+      } else {
+        console.error("[v0] Could not determine app URL from request headers or environment")
+        return NextResponse.json(
+          {
+            error:
+              "Server configuration error: Could not determine app URL. Please set NEXT_PUBLIC_APP_URL environment variable.",
+          },
+          { status: 500 },
+        )
+      }
     }
 
     // Validate token
