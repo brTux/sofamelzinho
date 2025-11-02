@@ -18,12 +18,24 @@ import { MessageNode } from "./nodes/message-node"
 import { ConditionNode } from "./nodes/condition-node"
 import { ActionNode } from "./nodes/action-node"
 import { DelayNode } from "./nodes/delay-node"
+import { TriggerNode } from "./nodes/trigger-node"
+import { TextMessageNode } from "./nodes/text-message-node"
+import { ImageNode } from "./nodes/image-node"
+import { AudioNode } from "./nodes/audio-node"
+import { VideoNode } from "./nodes/video-node"
+import { DataCollectionNode } from "./nodes/data-collection-node"
 
 const nodeTypes = {
   message: MessageNode,
   condition: ConditionNode,
   action: ActionNode,
   delay: DelayNode,
+  trigger: TriggerNode,
+  textMessage: TextMessageNode,
+  image: ImageNode,
+  audio: AudioNode,
+  video: VideoNode,
+  dataCollection: DataCollectionNode,
 }
 
 export interface FlowCanvasProps {
@@ -73,7 +85,7 @@ export function FlowCanvas({ flowId, initialNodes = [], initialEdges = [], onSav
   }
 
   const handleAddNode = useCallback(
-    (type: "message" | "condition" | "action" | "delay") => {
+    (type: string) => {
       const newNode: Node = {
         id: `${type}-${Date.now()}`,
         type,
@@ -88,13 +100,43 @@ export function FlowCanvas({ flowId, initialNodes = [], initialEdges = [], onSav
   return (
     <div className="w-full h-screen flex flex-col bg-background">
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-4 border-b border-border bg-card">
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-2 p-4 border-b border-border bg-card">
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => handleAddNode("message")}
+            onClick={() => handleAddNode("trigger")}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition"
+          >
+            Trigger
+          </button>
+          <button
+            onClick={() => handleAddNode("textMessage")}
             className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
           >
-            Message
+            Text
+          </button>
+          <button
+            onClick={() => handleAddNode("image")}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 transition"
+          >
+            Image
+          </button>
+          <button
+            onClick={() => handleAddNode("audio")}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700 transition"
+          >
+            Audio
+          </button>
+          <button
+            onClick={() => handleAddNode("video")}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700 transition"
+          >
+            Video
+          </button>
+          <button
+            onClick={() => handleAddNode("dataCollection")}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+          >
+            Data Collection
           </button>
           <button
             onClick={() => handleAddNode("condition")}

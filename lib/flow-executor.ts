@@ -29,8 +29,10 @@ async function executeNode(
   const supabase = await createClient()
 
   switch (nodeType) {
-    case "message":
-      // Send a message to the user
+    case "trigger":
+      return { success: true, nextNodeIds: config.nextNodeIds || [] }
+
+    case "textMessage":
       if (config.text) {
         const result = await sendTelegramMessage(
           context.botToken,
@@ -40,7 +42,130 @@ async function executeNode(
         )
 
         if (result.ok) {
-          // Store the outgoing message
+          await supabase.from("messages").insert({
+            conversation_id: context.conversationId,
+            flow_execution_id: context.executionId,
+            message_type: "outgoing",
+            content: config.text,
+            telegram_message_id: result.result?.message_id,
+          })
+        }
+      }
+      return { success: config.text ? true : false, nextNodeIds: config.nextNodeIds || [] }
+
+    case "image":
+      if (config.imageUrl) {
+        const result = await sendTelegramMessage(
+          context.botToken,
+          context.telegramChatId,
+          config.caption || "",
+          undefined,
+          { type: "photo", media: config.imageUrl },
+        )
+
+        if (result.ok) {
+          await supabase.from("messages").insert({
+            conversation_id: context.conversationId,
+            flow_execution_id: context.executionId,
+            message_type: "outgoing",
+            content: `[Image] ${config.caption || config.imageUrl}`,
+            telegram_message_id: result.result?.message_id,
+          })
+        }
+      }
+      return { success: config.imageUrl ? true : false, nextNodeIds: config.nextNodeIds || [] }
+
+    case "audio":
+      if (config.audioUrl) {
+        const result = await sendTelegramMessage(
+          context.botToken,
+          context.telegramChatId,
+          config.caption || "",
+          undefined,
+          { type: "audio", media: config.audioUrl },
+        )
+
+        if (result.ok) {
+          await supabase.from("messages").insert({
+            conversation_id: context.conversationId,
+            flow_execution_id: context.executionId,
+            message_type: "outgoing",
+            content: `[Audio] ${config.caption || config.audioUrl}`,
+            telegram_message_id: result.result?.message_id,
+          })
+        }
+      }
+      return { success: config.audioUrl ? true : false, nextNodeIds: config.nextNodeIds || [] }
+
+    case "video":
+      if (config.videoUrl) {
+        const result = await sendTelegramMessage(
+          context.botToken,
+          context.telegramChatId,
+          config.caption || "",
+          undefined,
+          { type: "video", media: config.videoUrl },
+        )
+
+        if (result.ok) {
+          await supabase.from("messages").insert({
+            conversation_id: context.conversationId,
+            flow_execution_id: context.executionId,
+            message_type: "outgoing",
+            content: `[Video] ${config.caption || config.videoUrl}`,
+            telegram_message_id: result.result?.message_id,
+          })
+        }
+      }
+      return { success: config.videoUrl ? true : false, nextNodeIds: config.nextNodeIds || [] }
+
+    case "dataCollection":
+      // Send the question
+      if (config.question) {
+        const result = await sendTelegramMessage(context.botToken, context.telegramChatId, config.question)
+
+        if (result.ok) {
+          await supabase.from("messages").insert({
+            conversation_id: context.conversationId,
+            flow_execution_id: context.executionId,
+            message_type: "outgoing",
+            content: config.question,
+            telegram_message_id: result.result?.message_id,
+          })
+        }
+      }
+
+      // Set timeout
+      const timeoutMs = (config.timeoutMinutes || 5) * 60 * 1000
+      const timeoutAt = new Date(Date.now() + timeoutMs).toISOString()
+
+      await supabase
+        .from("flow_executions")
+        .update({
+          current_node_id: nodeId,
+          timeout_at: timeoutAt,
+        })
+        .eq("id", context.executionId)
+
+      // Wait for response or timeout
+      const responseReceived = await waitForResponse(context.conversationId, timeoutMs)
+
+      if (responseReceived) {
+        return { success: true, nextNodeIds: config.responseNodeIds || [] }
+      } else {
+        return { success: true, nextNodeIds: config.timeoutNodeIds || [] }
+      }
+
+    case "message":
+      if (config.text) {
+        const result = await sendTelegramMessage(
+          context.botToken,
+          context.telegramChatId,
+          config.text,
+          config.reply_markup,
+        )
+
+        if (result.ok) {
           await supabase.from("messages").insert({
             conversation_id: context.conversationId,
             flow_execution_id: context.executionId,
@@ -53,18 +178,14 @@ async function executeNode(
       return { success: config.text ? true : false, nextNodeIds: config.nextNodeIds || [] }
 
     case "condition":
-      // Evaluate condition
       const conditionMet = evaluateCondition(config, context)
       const nextIds = conditionMet ? config.trueNodeIds : config.falseNodeIds
       return { success: true, nextNodeIds: nextIds || [] }
 
     case "action":
-      // Execute custom action (e.g., create user, update data)
-      // This is extensible - add more action types as needed
       return { success: true, nextNodeIds: config.nextNodeIds || [] }
 
     case "delay":
-      // Add delay before proceeding
       await new Promise((resolve) => setTimeout(resolve, config.delayMs || 1000))
       return { success: true, nextNodeIds: config.nextNodeIds || [] }
 
@@ -214,4 +335,38 @@ export async function findMatchingFlows(
       }
     }) || []
   )
+}
+
+/**
+ * Wait for user response with timeout
+ */
+async function waitForResponse(conversationId: string, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const startTime = Date.now()
+
+    const checkInterval = setInterval(async () => {
+      const supabase = await createClient()
+
+      const { data: recentMessages } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("conversation_id", conversationId)
+        .eq("message_type", "incoming")
+        .order("created_at", { ascending: false })
+        .limit(1)
+
+      if (recentMessages && recentMessages.length > 0) {
+        clearInterval(checkInterval)
+        resolve(true)
+      } else if (Date.now() - startTime > timeoutMs) {
+        clearInterval(checkInterval)
+        resolve(false)
+      }
+    }, 1000)
+
+    setTimeout(() => {
+      clearInterval(checkInterval)
+      resolve(false)
+    }, timeoutMs + 1000)
+  })
 }
