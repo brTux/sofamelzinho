@@ -70,6 +70,37 @@ export function FlowCanvas({ flowId, initialNodes = [], initialEdges = [], onSav
     setSelectedNode(null)
   }, [selectedNode, setNodes, setEdges])
 
+  const updateNodeData = useCallback(
+    (key: string, value: unknown) => {
+      if (!selectedNode) return
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === selectedNode.id
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  [key]: value,
+                },
+              }
+            : n,
+        ),
+      )
+      setSelectedNode((n) =>
+        n
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                [key]: value,
+              },
+            }
+          : null,
+      )
+    },
+    [selectedNode, setNodes],
+  )
+
   const handleSave = async () => {
     if (!onSave) return
 
@@ -195,9 +226,8 @@ export function FlowCanvas({ flowId, initialNodes = [], initialEdges = [], onSav
         </ReactFlow>
       </div>
 
-      {/* Properties Panel */}
       {selectedNode && (
-        <div className="w-64 border-l border-border bg-card p-4 max-h-screen overflow-y-auto">
+        <div className="w-80 border-l border-border bg-card p-4 max-h-screen overflow-y-auto">
           <h3 className="font-semibold mb-4">Node Properties</h3>
           <div className="space-y-4">
             <div>
@@ -218,7 +248,192 @@ export function FlowCanvas({ flowId, initialNodes = [], initialEdges = [], onSav
                 className="w-full mt-1 px-2 py-1 bg-muted text-foreground border border-input rounded text-sm"
               />
             </div>
-            <div className="text-xs text-muted-foreground">
+
+            {/* Trigger Node Properties */}
+            {selectedNode.type === "trigger" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Trigger Type</label>
+                  <select
+                    value={(selectedNode.data.triggerType as string) || "message"}
+                    onChange={(e) => updateNodeData("triggerType", e.target.value)}
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  >
+                    <option value="message">New Contact Message</option>
+                    <option value="keyword">Specific Word</option>
+                    <option value="command">Command (/)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">
+                    {(selectedNode.data.triggerType as string) === "command" ? "Command" : "Value"}
+                  </label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data.triggerValue as string) || ""}
+                    onChange={(e) => updateNodeData("triggerValue", e.target.value)}
+                    placeholder={(selectedNode.data.triggerType as string) === "command" ? "start" : "Enter keyword..."}
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Text Message Node Properties */}
+            {selectedNode.type === "textMessage" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Message</label>
+                  <textarea
+                    value={(selectedNode.data.message as string) || ""}
+                    onChange={(e) => updateNodeData("message", e.target.value)}
+                    placeholder="Enter message text..."
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm h-20 resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Quick Reply Buttons (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data.buttons as string) || ""}
+                    onChange={(e) => updateNodeData("buttons", e.target.value)}
+                    placeholder="Yes, No, Maybe..."
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Image Node Properties */}
+            {selectedNode.type === "image" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Image URL</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data.imageUrl as string) || ""}
+                    onChange={(e) => updateNodeData("imageUrl", e.target.value)}
+                    placeholder="https://example.com/image.jpg"
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Caption</label>
+                  <textarea
+                    value={(selectedNode.data.caption as string) || ""}
+                    onChange={(e) => updateNodeData("caption", e.target.value)}
+                    placeholder="Image caption (optional)"
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm h-16 resize-none"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Audio Node Properties */}
+            {selectedNode.type === "audio" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Audio URL</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data.audioUrl as string) || ""}
+                    onChange={(e) => updateNodeData("audioUrl", e.target.value)}
+                    placeholder="https://example.com/audio.mp3"
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Caption</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data.caption as string) || ""}
+                    onChange={(e) => updateNodeData("caption", e.target.value)}
+                    placeholder="Audio caption (optional)"
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Video Node Properties */}
+            {selectedNode.type === "video" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Video URL</label>
+                  <input
+                    type="text"
+                    value={(selectedNode.data.videoUrl as string) || ""}
+                    onChange={(e) => updateNodeData("videoUrl", e.target.value)}
+                    placeholder="https://example.com/video.mp4"
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Caption</label>
+                  <textarea
+                    value={(selectedNode.data.caption as string) || ""}
+                    onChange={(e) => updateNodeData("caption", e.target.value)}
+                    placeholder="Video caption (optional)"
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm h-16 resize-none"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Data Collection Node Properties */}
+            {selectedNode.type === "dataCollection" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Question</label>
+                  <textarea
+                    value={(selectedNode.data.question as string) || ""}
+                    onChange={(e) => updateNodeData("question", e.target.value)}
+                    placeholder="Enter question for user..."
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm h-16 resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Field Type</label>
+                  <select
+                    value={(selectedNode.data.fieldType as string) || "text"}
+                    onChange={(e) => updateNodeData("fieldType", e.target.value)}
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  >
+                    <option value="text">Text</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                    <option value="number">Number</option>
+                    <option value="choice">Multiple Choice</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Timeout (minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={(selectedNode.data.timeoutMinutes as number) || 5}
+                    onChange={(e) => updateNodeData("timeoutMinutes", Number.parseInt(e.target.value))}
+                    className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Delay Node Properties */}
+            {selectedNode.type === "delay" && (
+              <div>
+                <label className="text-sm font-medium text-foreground">Delay (seconds)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={(selectedNode.data.delaySeconds as number) || 5}
+                  onChange={(e) => updateNodeData("delaySeconds", Number.parseInt(e.target.value))}
+                  className="w-full mt-1 px-2 py-1 bg-background text-foreground border border-input rounded text-sm"
+                />
+              </div>
+            )}
+
+            <div className="text-xs text-muted-foreground pt-2">
               Position: ({selectedNode.position.x.toFixed(0)}, {selectedNode.position.y.toFixed(0)})
             </div>
           </div>

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, MessageSquare, Zap, LogOut, Settings } from "lucide-react"
+import { LayoutDashboard, MessageSquare, Zap, LogOut, Settings, Mail } from "lucide-react"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -20,6 +20,7 @@ export function Sidebar() {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/bots", label: "Bots", icon: MessageSquare },
     { href: "/dashboard/flows", label: "Flows", icon: Zap },
+    { href: "/dashboard/inbox", label: "Live Chat", icon: Mail },
     { href: "/dashboard/conversations", label: "Conversations", icon: MessageSquare },
   ]
 
