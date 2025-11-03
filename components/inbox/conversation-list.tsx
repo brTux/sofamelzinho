@@ -25,7 +25,6 @@ export function ConversationList({ conversations, selectedId, onSelectConversati
   const supabase = createClient()
 
   useEffect(() => {
-    // Load last message for each conversation
     const loadLastMessages = async () => {
       const messages: Record<string, string> = {}
 
@@ -36,7 +35,7 @@ export function ConversationList({ conversations, selectedId, onSelectConversati
           .eq("conversation_id", conv.id)
           .order("created_at", { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
 
         if (data) {
           messages[conv.id] = data.content.substring(0, 50)
@@ -47,6 +46,30 @@ export function ConversationList({ conversations, selectedId, onSelectConversati
     }
 
     loadLastMessages()
+
+    const messagesChannel = supabase
+      .channel("messages_preview")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload: any) => {
+          console.log("[v0] Realtime message event for preview:", payload.new.conversation_id)
+          const convId = payload.new.conversation_id
+          setLastMessages((prev) => ({
+            ...prev,
+            [convId]: payload.new.content.substring(0, 50),
+          }))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(messagesChannel)
+    }
   }, [conversations, supabase])
 
   return (

@@ -91,14 +91,26 @@ export function ChatPanel({ conversationId }: ChatPanelProps) {
 
     setSending(true)
     try {
-      await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        message_type: "outgoing",
-        content: newMessage,
-        media_type: "text",
+      console.log("[v0] Sending message to Telegram for conversation:", conversationId)
+
+      const response = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId,
+          message: newMessage,
+        }),
       })
 
-      setNewMessage("")
+      const result = await response.json()
+      console.log("[v0] Send message response:", result)
+
+      if (result.success) {
+        console.log("[v0] Message delivered to Telegram successfully")
+        setNewMessage("")
+      } else {
+        console.error("[v0] Failed to send message:", result.error)
+      }
     } catch (error) {
       console.error("[v0] Error sending message:", error)
     } finally {
