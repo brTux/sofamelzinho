@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
     let appUrl = process.env.NEXT_PUBLIC_APP_URL
 
     if (!appUrl) {
-      // Auto-detect from request headers (works in preview and production)
       const protocol = request.headers.get("x-forwarded-proto") || "https"
       const host = request.headers.get("x-forwarded-host") || request.headers.get("host")
 
@@ -37,12 +36,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log("[v0] ===== CONNECTING BOT =====")
+    console.log("[v0] Bot token:", botToken.substring(0, 10) + "***")
+    console.log("[v0] Workspace ID:", workspaceId)
+    console.log("[v0] App URL:", appUrl)
+
     // Validate token
+    console.log("[v0] Validating bot token...")
     const botInfo = await validateTelegramToken(botToken)
 
     if (!botInfo.ok || !botInfo.result) {
+      console.error("[v0] Invalid bot token:", botInfo.description)
       return NextResponse.json({ error: "Invalid bot token" }, { status: 400 })
     }
+
+    console.log("[v0] Bot validated:", botInfo.result.username)
 
     const supabase = await createClient()
 
@@ -53,10 +61,12 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingBot) {
+      console.warn("[v0] Bot already connected")
       return NextResponse.json({ error: "Bot already connected" }, { status: 400 })
     }
 
     // Save bot to database
+    console.log("[v0] Saving bot to database...")
     const { data: newBot, error: dbError } = await supabase
       .from("telegram_bots")
       .insert({
@@ -73,8 +83,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save bot" }, { status: 500 })
     }
 
-    const webhookUrl = `${appUrl}/api/telegram/webhook`
-    console.log("[v0] Setting webhook for bot:", botInfo.result.username, "URL:", webhookUrl)
+    console.log("[v0] Bot saved to database with ID:", newBot.id)
+
+    const webhookUrl = `${appUrl}/api/flows/webhook`
+    console.log("[v0] Setting webhook URL:", webhookUrl)
 
     const webhookResult = await setTelegramWebhook(botToken, webhookUrl)
 
@@ -92,6 +104,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log("[v0] Verifying webhook setup with Telegram...")
+    const webhookInfo = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
+    const webhookInfoData = await webhookInfo.json()
+
+    console.log("[v0] Webhook info:", {
+      url: webhookInfoData.result?.url,
+      pending_update_count: webhookInfoData.result?.pending_update_count,
+      last_error_message: webhookInfoData.result?.last_error_message,
+      last_error_date: webhookInfoData.result?.last_error_date,
+    })
+
+    if (webhookInfoData.result?.last_error_message) {
+      console.warn("[v0] Webhook has errors:", webhookInfoData.result.last_error_message)
+    }
+
+    console.log("[v0] ===== BOT CONNECTED SUCCESSFULLY =====")
+
     return NextResponse.json({
       ok: true,
       bot: {
@@ -99,9 +128,11 @@ export async function POST(request: NextRequest) {
         name: newBot.bot_name,
         username: newBot.bot_username,
       },
+      webhookInfo: webhookInfoData.result,
     })
   } catch (error) {
-    console.error("[v0] Connect bot error:", error)
+    console.error("[v0] ===== CONNECT BOT ERROR =====")
+    console.error("[v0] Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

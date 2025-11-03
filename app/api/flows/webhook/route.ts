@@ -11,6 +11,14 @@ export async function POST(request: NextRequest) {
   try {
     const update: TelegramUpdate = await request.json()
 
+    console.log("[v0] ===== TELEGRAM WEBHOOK RECEIVED =====")
+    console.log("[v0] Raw payload:", JSON.stringify(update, null, 2))
+    console.log("[v0] Update ID:", update.update_id)
+    console.log("[v0] Request headers:", {
+      "content-type": request.headers.get("content-type"),
+      "user-agent": request.headers.get("user-agent"),
+    })
+
     if (!update.update_id) {
       console.log("[v0] Invalid update: missing update_id")
       return NextResponse.json({ ok: true })
@@ -59,6 +67,8 @@ export async function POST(request: NextRequest) {
       const telegramChatId = message.chat.id
       const { content, mediaType } = extractMessageContent(message)
 
+      console.log("[v0] Processing message from user:", telegramUserId, "Chat:", telegramChatId, "Content:", content)
+
       if (!content) {
         console.log("[v0] Message has no extractable content")
         return NextResponse.json({ ok: true })
@@ -76,9 +86,11 @@ export async function POST(request: NextRequest) {
       }
 
       if (!bot) {
-        console.error("[v0] No bot found")
+        console.error("[v0] No bot found in database")
         return NextResponse.json({ ok: true })
       }
+
+      console.log("[v0] Found bot:", bot.id)
 
       // Get or create conversation
       let { data: conversation, error: convError } = await supabase
@@ -94,6 +106,8 @@ export async function POST(request: NextRequest) {
       }
 
       if (!conversation) {
+        console.log("[v0] Creating new conversation for user:", telegramUserId)
+
         const { data: newConv, error: createError } = await supabase
           .from("conversations")
           .insert({
@@ -113,21 +127,27 @@ export async function POST(request: NextRequest) {
 
         conversation = newConv
         console.log("[v0] Created new conversation:", conversation.id)
+      } else {
+        console.log("[v0] Found existing conversation:", conversation.id)
       }
 
       // Store incoming message
-      const { error: msgError } = await supabase.from("messages").insert({
-        conversation_id: conversation.id,
-        message_type: "incoming",
-        content,
-        telegram_message_id: message.message_id,
-        media_type: mediaType,
-      })
+      console.log("[v0] Storing message to database...")
+      const { error: msgError, data: msgData } = await supabase
+        .from("messages")
+        .insert({
+          conversation_id: conversation.id,
+          message_type: "incoming",
+          content,
+          telegram_message_id: message.message_id,
+          media_type: mediaType,
+        })
+        .select()
 
       if (msgError) {
         console.error("[v0] Failed to store message:", msgError)
       } else {
-        console.log("[v0] Stored incoming message for conversation:", conversation.id)
+        console.log("[v0] Successfully stored message:", msgData?.[0]?.id, "to conversation:", conversation.id)
       }
 
       // Find matching flows
@@ -176,8 +196,6 @@ export async function POST(request: NextRequest) {
     if (update.callback_query) {
       const query = update.callback_query
       console.log("[v0] Callback query received:", query.id)
-
-      // Log callback for debugging - in production you might trigger flows based on callback data
       console.log("[v0] Callback data:", query.data, "From user:", query.from.id)
 
       return NextResponse.json({ ok: true })
@@ -185,18 +203,16 @@ export async function POST(request: NextRequest) {
 
     if (update.channel_post) {
       const post = update.channel_post
-      const { content } = extractMessageContent(post)
-
-      if (content) {
-        console.log("[v0] Channel post received:", post.message_id, "Content:", content)
-      }
+      console.log("[v0] Channel post received:", post.message_id)
 
       return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
-    console.error("[v0] Webhook error:", error)
+    console.error("[v0] ===== WEBHOOK ERROR =====")
+    console.error("[v0] Error:", error)
+    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack")
     // Always return 200 OK to prevent Telegram retries
     return NextResponse.json({ ok: true })
   }

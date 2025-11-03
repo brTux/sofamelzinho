@@ -39,18 +39,27 @@ export function ChatPanel({ conversationId }: ChatPanelProps) {
     if (!conversationId) return
 
     const loadMessages = async () => {
-      const { data } = await supabase
+      console.log("[v0] Loading messages for conversation:", conversationId)
+
+      const { data, error } = await supabase
         .from("messages")
         .select("id, content, message_type, created_at, media_type")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: true })
         .limit(100)
 
-      setMessages(data || [])
+      if (error) {
+        console.error("[v0] Error loading messages:", error)
+      } else {
+        console.log("[v0] Loaded messages:", data?.length || 0)
+        setMessages(data || [])
+      }
       setLoading(false)
     }
 
     loadMessages()
+
+    console.log("[v0] Subscribing to realtime messages for conversation:", conversationId)
 
     const channel = supabase
       .channel(`messages_${conversationId}`)
@@ -63,12 +72,16 @@ export function ChatPanel({ conversationId }: ChatPanelProps) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload: any) => {
+          console.log("[v0] Realtime message received:", payload.new)
           setMessages((prev) => [...prev, payload.new as Message])
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log("[v0] Subscription status:", status)
+      })
 
     return () => {
+      console.log("[v0] Unsubscribing from messages channel")
       supabase.removeChannel(channel)
     }
   }, [conversationId, supabase])
