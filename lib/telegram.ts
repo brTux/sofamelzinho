@@ -121,30 +121,75 @@ export async function deleteTelegramWebhook(token: string): Promise<{ ok: boolea
 }
 
 /**
- * Send a message via Telegram API
+ * Send a message via Telegram API with support for media
  */
 export async function sendTelegramMessage(
   token: string,
   chatId: number,
   text: string,
   replyMarkup?: object,
-): Promise<{ ok: boolean; result?: object; error_code?: number }> {
+  media?: { type: "photo" | "audio" | "video"; media: string },
+): Promise<{ ok: boolean; result?: object; error_code?: number; description?: string }> {
   try {
-    const response = await fetch(`${TELEGRAM_API_BASE}${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        reply_markup: replyMarkup,
-        parse_mode: "HTML",
-      }),
-    })
-    return await response.json()
+    if (media && media.type === "photo") {
+      const response = await fetch(`${TELEGRAM_API_BASE}${token}/sendPhoto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: media.media,
+          caption: text,
+          parse_mode: "HTML",
+          reply_markup: replyMarkup,
+        }),
+      })
+      return await response.json()
+    } else if (media && media.type === "audio") {
+      const response = await fetch(`${TELEGRAM_API_BASE}${token}/sendAudio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          audio: media.media,
+          caption: text,
+          parse_mode: "HTML",
+          reply_markup: replyMarkup,
+        }),
+      })
+      return await response.json()
+    } else if (media && media.type === "video") {
+      const response = await fetch(`${TELEGRAM_API_BASE}${token}/sendVideo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          video: media.media,
+          caption: text,
+          parse_mode: "HTML",
+          reply_markup: replyMarkup,
+        }),
+      })
+      return await response.json()
+    } else {
+      // Regular text message
+      const response = await fetch(`${TELEGRAM_API_BASE}${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          reply_markup: replyMarkup,
+          parse_mode: "HTML",
+        }),
+      })
+      return await response.json()
+    }
   } catch (error) {
+    console.error("[v0] Send message error:", error)
     return {
       ok: false,
       error_code: 500,
+      description: "Failed to send message",
     }
   }
 }
