@@ -74,23 +74,26 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      const { data: bot, error: botError } = await supabase
-        .from("telegram_bots")
-        .select("id, bot_token")
-        .limit(1)
-        .maybeSingle()
+      // Since Telegram doesn't send bot_token in updates, we query with service role to find the bot
+      // The webhook is specific to one bot, so we can find it by checking if it's the only bot
+      // or we need to extract from the webhook URL path
+      console.log("[v0] Querying for bots to identify which bot received this update...")
 
-      if (botError) {
-        console.error("[v0] Bot query error:", botError)
+      // Get all bots (using service role since webhook is unauthenticated)
+      const { data: bots, error: botsError } = await supabase.from("telegram_bots").select("id, bot_token").limit(100)
+
+      if (botsError || !bots || bots.length === 0) {
+        console.error("[v0] No bots found in database or query error:", botsError)
         return NextResponse.json({ ok: true })
       }
 
-      if (!bot) {
-        console.error("[v0] No bot found in database")
-        return NextResponse.json({ ok: true })
-      }
+      console.log("[v0] Found", bots.length, "bot(s) in database")
 
-      console.log("[v0] Found bot:", bot.id)
+      // Try to identify which bot this is for by checking bot token with getMe
+      // We'll use the first bot as a temporary measure - in production,
+      // you should parse the webhook URL or store bot_id in a lookup table
+      const bot = bots[0] // This is a temporary solution
+      console.log("[v0] Using bot:", bot.id, "with token:", bot.bot_token.substring(0, 10) + "***")
 
       // Get or create conversation
       let { data: conversation, error: convError } = await supabase
@@ -126,7 +129,7 @@ export async function POST(request: NextRequest) {
         }
 
         conversation = newConv
-        console.log("[v0] Created new conversation:", conversation.id)
+        console.log("[v0] Successfully created new conversation:", conversation.id)
       } else {
         console.log("[v0] Found existing conversation:", conversation.id)
       }
@@ -147,12 +150,14 @@ export async function POST(request: NextRequest) {
       if (msgError) {
         console.error("[v0] Failed to store message:", msgError)
       } else {
-        console.log("[v0] Successfully stored message:", msgData?.[0]?.id, "to conversation:", conversation.id)
+        console.log("[v0] ✓ Successfully stored message:", msgData?.[0]?.id)
+        console.log("[v0] ✓ Message added to conversation:", conversation.id)
+        console.log("[v0] ✓ Message content:", content.substring(0, 100))
       }
 
       // Find matching flows
       const matchingFlows = await findMatchingFlows(bot.id, content)
-      console.log("[v0] Found matching flows:", matchingFlows.length)
+      console.log("[v0] Found", matchingFlows.length, "matching flow(s)")
 
       // Execute each matching flow
       for (const flow of matchingFlows) {
@@ -190,6 +195,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      console.log("[v0] ===== MESSAGE PROCESSING COMPLETE =====")
       return NextResponse.json({ ok: true })
     }
 
