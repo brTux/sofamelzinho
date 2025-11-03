@@ -27,21 +27,25 @@ export default function InboxPage() {
 
   useEffect(() => {
     const loadConversations = async () => {
+      console.log("[v0] Loading conversations from Supabase")
       const { data } = await supabase
         .from("conversations")
         .select("id, first_name, telegram_user_name, telegram_user_id, created_at, updated_at")
         .order("updated_at", { ascending: false })
         .limit(100)
 
+      console.log("[v0] ✓ Loaded conversations:", data?.length || 0)
       setConversations(data || [])
       if (data && data.length > 0) {
         setSelectedConversation(data[0].id)
+        console.log("[v0] ✓ Auto-selected first conversation:", data[0].id)
       }
       setLoading(false)
     }
 
     loadConversations()
 
+    console.log("[v0] Subscribing to conversations realtime events")
     const channel = supabase
       .channel("inbox_conversations")
       .on(
@@ -52,6 +56,7 @@ export default function InboxPage() {
           table: "conversations",
         },
         (payload: any) => {
+          console.log("[v0] ✓ New conversation received via realtime:", payload.new.id)
           setConversations((prev) => [payload.new as ConversationItem, ...prev])
         },
       )
@@ -63,6 +68,7 @@ export default function InboxPage() {
           table: "conversations",
         },
         (payload: any) => {
+          console.log("[v0] ✓ Conversation updated via realtime:", payload.new.id)
           setConversations((prev) =>
             prev
               .map((c) => (c.id === payload.new.id ? (payload.new as ConversationItem) : c))
@@ -70,9 +76,16 @@ export default function InboxPage() {
           )
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] ✓ Conversations subscription connected")
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] Conversations subscription error")
+        }
+      })
 
     return () => {
+      console.log("[v0] Unsubscribing from conversations channel")
       supabase.removeChannel(channel)
     }
   }, [supabase])

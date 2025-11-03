@@ -26,6 +26,7 @@ export function ChatPanel({ conversationId }: ChatPanelProps) {
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
+  const channelRef = useRef<any>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -72,13 +73,23 @@ export function ChatPanel({ conversationId }: ChatPanelProps) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload: any) => {
-          console.log("[v0] Realtime message received:", payload.new)
-          setMessages((prev) => [...prev, payload.new as Message])
+          console.log("[v0] ✓ Realtime message event received:", payload.new.id)
+          const newMsg = payload.new as Message
+          setMessages((prev) => [...prev, newMsg])
+          console.log("[v0] ✓ UI updated with new message, total:", messages.length + 1)
         },
       )
       .subscribe((status) => {
-        console.log("[v0] Subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] ✓ Subscription connected for conversation:", conversationId)
+        } else if (status === "CLOSED") {
+          console.log("[v0] Subscription closed for conversation:", conversationId)
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] Subscription error for conversation:", conversationId)
+        }
       })
+
+    channelRef.current = channel
 
     return () => {
       console.log("[v0] Unsubscribing from messages channel")
@@ -90,23 +101,26 @@ export function ChatPanel({ conversationId }: ChatPanelProps) {
     if (!newMessage.trim()) return
 
     setSending(true)
+    const messageText = newMessage
+
     try {
-      console.log("[v0] Sending message to Telegram for conversation:", conversationId)
+      console.log("[v0] Sending message to conversation:", conversationId)
+      console.log("[v0] Message content:", messageText.substring(0, 50))
 
       const response = await fetch("/api/messages/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversationId,
-          message: newMessage,
+          message: messageText,
         }),
       })
 
       const result = await response.json()
-      console.log("[v0] Send message response:", result)
 
       if (result.success) {
-        console.log("[v0] Message delivered to Telegram successfully")
+        console.log("[v0] ✓ Message delivered to Telegram, messageId:", result.messageId)
+        console.log("[v0] ✓ Message will appear in UI via realtime subscription")
         setNewMessage("")
       } else {
         console.error("[v0] Failed to send message:", result.error)

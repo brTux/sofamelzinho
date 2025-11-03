@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Conversation not found" }, { status: 404 })
     }
 
-    console.log("[v0] Conversation found, fetching bot token")
+    console.log("[v0] ✓ Conversation found, telegram_user_id:", conversation.telegram_user_id)
 
     // Get bot token from telegram_bots table
     const { data: bot, error: botError } = await supabase
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Bot not found" }, { status: 404 })
     }
 
-    console.log("[v0] Sending message to Telegram user:", conversation.telegram_user_id)
+    console.log("[v0] ✓ Bot found, sending to Telegram API")
 
     // Send message via Telegram API
     const telegramResponse = await sendTelegramMessage(bot.bot_token, conversation.telegram_user_id, message)
@@ -71,9 +71,8 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log("[v0] Message sent to Telegram successfully, storing in database")
+    console.log("[v0] ✓ Message sent to Telegram, messageId:", telegramResponse.result?.message_id)
 
-    // Store message in database
     const { error: insertError } = await supabase.from("messages").insert({
       conversation_id: conversationId,
       message_type: "outgoing",
@@ -87,7 +86,7 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Failed to store message" }, { status: 500 })
     }
 
-    console.log("[v0] Message stored successfully, sending 200 OK response")
+    console.log("[v0] ✓ Message stored in Supabase, realtime subscribers will be notified")
     return Response.json({ success: true, messageId: telegramResponse.result?.message_id })
   } catch (error) {
     console.error("[v0] Send message error:", error)
