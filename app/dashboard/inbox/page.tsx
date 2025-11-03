@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { ConversationList } from "@/components/inbox/conversation-list"
+import { ChatPanel } from "@/components/inbox/chat-panel"
 import { MessageSquare } from "lucide-react"
 
 interface ConversationItem {
@@ -13,13 +13,14 @@ interface ConversationItem {
   telegram_user_name?: string
   telegram_user_id: number
   created_at: string
+  updated_at: string
   unread_count?: number
-  last_message?: string
-  last_message_time?: string
 }
 
 export default function InboxPage() {
+  const router = useRouter()
   const [conversations, setConversations] = useState<ConversationItem[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const supabase = createClient()
@@ -28,12 +29,14 @@ export default function InboxPage() {
     const loadConversations = async () => {
       const { data } = await supabase
         .from("conversations")
-        .select("id, first_name, telegram_user_name, telegram_user_id, created_at, is_archived")
-        .eq("is_archived", false)
+        .select("id, first_name, telegram_user_name, telegram_user_id, created_at, updated_at")
         .order("updated_at", { ascending: false })
         .limit(100)
 
       setConversations(data || [])
+      if (data && data.length > 0) {
+        setSelectedConversation(data[0].id)
+      }
       setLoading(false)
     }
 
@@ -60,7 +63,11 @@ export default function InboxPage() {
           table: "conversations",
         },
         (payload: any) => {
-          setConversations((prev) => prev.map((c) => (c.id === payload.new.id ? (payload.new as ConversationItem) : c)))
+          setConversations((prev) =>
+            prev
+              .map((c) => (c.id === payload.new.id ? (payload.new as ConversationItem) : c))
+              .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
+          )
         },
       )
       .subscribe()
@@ -78,44 +85,59 @@ export default function InboxPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <MessageSquare size={24} className="text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">Live Chat</h1>
-            <p className="text-muted-foreground">Manage conversations with bot users</p>
+      {/* Main layout: list + chat side by side */}
+      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
+        {/* Left sidebar: Conversations list */}
+        <div className="w-80 flex flex-col border border-border rounded-lg overflow-hidden bg-card">
+          {/* Search */}
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare size={20} className="text-primary" />
+              <h2 className="font-semibold">Conversations</h2>
+            </div>
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+            />
+          </div>
+
+          {/* Conversations list */}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground text-sm">Loading...</p>
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground text-sm">
+                  {conversations.length === 0 ? "No conversations yet" : "No matches"}
+                </p>
+              </div>
+            ) : (
+              <ConversationList
+                conversations={filteredConversations}
+                selectedId={selectedConversation}
+                onSelectConversation={setSelectedConversation}
+              />
+            )}
           </div>
         </div>
 
-        {/* Search */}
-        <Input
-          placeholder="Search conversations..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-md"
-        />
-      </div>
-
-      {/* Conversations List */}
-      <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">Loading conversations...</p>
-          </div>
-        ) : filteredConversations.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <Card className="w-full max-w-md mx-auto">
-              <CardContent className="text-center py-12">
-                <MessageSquare size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">
-                  {conversations.length === 0 ? "No conversations yet" : "No conversations match your search"}
-                </p>
-              </CardContent>
-            </Card>
+        {/* Right side: Chat panel */}
+        {selectedConversation ? (
+          <div className="flex-1 flex flex-col border border-border rounded-lg overflow-hidden bg-card">
+            <ChatPanel conversationId={selectedConversation} />
           </div>
         ) : (
-          <ConversationList conversations={filteredConversations} />
+          <div className="flex-1 flex items-center justify-center border border-border rounded-lg bg-card">
+            <div className="text-center">
+              <MessageSquare size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
+              <p className="text-muted-foreground">Select a conversation to start chatting</p>
+            </div>
+          </div>
         )}
       </div>
     </div>

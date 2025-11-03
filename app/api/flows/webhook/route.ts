@@ -4,31 +4,66 @@ import type { TelegramUpdate } from "@/lib/telegram"
 import { executeFlow, findMatchingFlows, type FlowContext } from "@/lib/flow-executor"
 
 /**
- * Telegram webhook endpoint
- * Receives incoming updates from Telegram and routes them to flows
+ * Telegram webhook endpoint - receives updates and routes to flows
+ * Always returns 200 OK to prevent Telegram retries
  */
 export async function POST(request: NextRequest) {
   try {
     const update: TelegramUpdate = await request.json()
 
-    // Validate update structure
     if (!update.update_id) {
       console.log("[v0] Invalid update: missing update_id")
-      return NextResponse.json({ ok: false }, { status: 400 })
+      return NextResponse.json({ ok: true })
     }
 
     console.log("[v0] Received Telegram update:", update.update_id)
 
     const supabase = await createClient()
 
+    // Helper function to extract message content
+    const extractMessageContent = (data: any) => {
+      let content = ""
+      let mediaType = "text"
+
+      if (data.text) {
+        content = data.text
+        mediaType = "text"
+      } else if (data.photo) {
+        content = `[Photo: ${data.photo[data.photo.length - 1].file_id}]`
+        if (data.caption) content += `\n${data.caption}`
+        mediaType = "photo"
+      } else if (data.audio) {
+        content = `[Audio: ${data.audio.file_id}]`
+        if (data.caption) content += `\n${data.caption}`
+        mediaType = "audio"
+      } else if (data.video) {
+        content = `[Video: ${data.video.file_id}]`
+        if (data.caption) content += `\n${data.caption}`
+        mediaType = "video"
+      } else if (data.document) {
+        content = `[Document: ${data.document.file_name}]`
+        if (data.caption) content += `\n${data.caption}`
+        mediaType = "document"
+      } else if (data.sticker) {
+        content = `[Sticker: ${data.sticker.file_id}]`
+        mediaType = "sticker"
+      }
+
+      return { content, mediaType }
+    }
+
     // Handle incoming message
-    if (update.message?.text) {
+    if (update.message) {
       const message = update.message
       const telegramUserId = message.from.id
       const telegramChatId = message.chat.id
-      const messageText = message.text
+      const { content, mediaType } = extractMessageContent(message)
 
-      // Find the bot by checking active bots with webhooks
+      if (!content) {
+        console.log("[v0] Message has no extractable content")
+        return NextResponse.json({ ok: true })
+      }
+
       const { data: bot, error: botError } = await supabase
         .from("telegram_bots")
         .select("id, bot_token")
@@ -37,12 +72,12 @@ export async function POST(request: NextRequest) {
 
       if (botError) {
         console.error("[v0] Bot query error:", botError)
-        return NextResponse.json({ ok: false }, { status: 500 })
+        return NextResponse.json({ ok: true })
       }
 
       if (!bot) {
         console.error("[v0] No bot found")
-        return NextResponse.json({ ok: false }, { status: 404 })
+        return NextResponse.json({ ok: true })
       }
 
       // Get or create conversation
@@ -55,11 +90,10 @@ export async function POST(request: NextRequest) {
 
       if (convError) {
         console.error("[v0] Conversation query error:", convError)
-        return NextResponse.json({ ok: false }, { status: 500 })
+        return NextResponse.json({ ok: true })
       }
 
       if (!conversation) {
-        // Create new conversation
         const { data: newConv, error: createError } = await supabase
           .from("conversations")
           .insert({
@@ -74,7 +108,7 @@ export async function POST(request: NextRequest) {
 
         if (createError || !newConv) {
           console.error("[v0] Failed to create conversation:", createError)
-          return NextResponse.json({ ok: false }, { status: 500 })
+          return NextResponse.json({ ok: true })
         }
 
         conversation = newConv
@@ -85,8 +119,9 @@ export async function POST(request: NextRequest) {
       const { error: msgError } = await supabase.from("messages").insert({
         conversation_id: conversation.id,
         message_type: "incoming",
-        content: messageText,
+        content,
         telegram_message_id: message.message_id,
+        media_type: mediaType,
       })
 
       if (msgError) {
@@ -96,13 +131,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Find matching flows
-      const matchingFlows = await findMatchingFlows(bot.id, messageText)
+      const matchingFlows = await findMatchingFlows(bot.id, content)
       console.log("[v0] Found matching flows:", matchingFlows.length)
 
       // Execute each matching flow
       for (const flow of matchingFlows) {
         try {
-          // Create flow execution record
           const { data: execution, error: execError } = await supabase
             .from("flow_executions")
             .insert({
@@ -118,14 +152,13 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          // Execute the flow
           const context: FlowContext = {
             botId: bot.id,
             botToken: bot.bot_token,
             conversationId: conversation.id,
             telegramUserId,
             telegramChatId,
-            message: messageText,
+            message: content,
             flowId: flow.id,
             executionId: execution.id,
           }
@@ -140,17 +173,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Handle callback query (button clicks)
     if (update.callback_query) {
       const query = update.callback_query
       console.log("[v0] Callback query received:", query.id)
+
+      // Log callback for debugging - in production you might trigger flows based on callback data
+      console.log("[v0] Callback data:", query.data, "From user:", query.from.id)
+
+      return NextResponse.json({ ok: true })
+    }
+
+    if (update.channel_post) {
+      const post = update.channel_post
+      const { content } = extractMessageContent(post)
+
+      if (content) {
+        console.log("[v0] Channel post received:", post.message_id, "Content:", content)
+      }
+
       return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("[v0] Webhook error:", error)
-    return NextResponse.json({ ok: false, error: "Webhook processing failed" }, { status: 500 })
+    // Always return 200 OK to prevent Telegram retries
+    return NextResponse.json({ ok: true })
   }
 }
 

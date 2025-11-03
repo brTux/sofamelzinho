@@ -1,10 +1,10 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Card } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { User } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface Conversation {
   id: string
@@ -16,35 +16,71 @@ interface Conversation {
 
 interface ConversationListProps {
   conversations: Conversation[]
+  selectedId?: string | null
+  onSelectConversation?: (id: string) => void
 }
 
-export function ConversationList({ conversations }: ConversationListProps) {
-  const router = useRouter()
+export function ConversationList({ conversations, selectedId, onSelectConversation }: ConversationListProps) {
+  const [lastMessages, setLastMessages] = useState<Record<string, string>>({})
+  const supabase = createClient()
+
+  useEffect(() => {
+    // Load last message for each conversation
+    const loadLastMessages = async () => {
+      const messages: Record<string, string> = {}
+
+      for (const conv of conversations) {
+        const { data } = await supabase
+          .from("messages")
+          .select("content")
+          .eq("conversation_id", conv.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single()
+
+        if (data) {
+          messages[conv.id] = data.content.substring(0, 50)
+        }
+      }
+
+      setLastMessages(messages)
+    }
+
+    loadLastMessages()
+  }, [conversations, supabase])
 
   return (
-    <div className="space-y-2 p-4">
+    <div className="space-y-1 p-2">
       {conversations.map((conv) => (
-        <Link key={conv.id} href={`/dashboard/inbox/${conv.id}`}>
-          <Card className="p-4 hover:bg-accent cursor-pointer transition">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
-                  <User size={20} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold truncate">{conv.first_name}</h3>
-                    {conv.unread_count && conv.unread_count > 0 && <Badge variant="default">{conv.unread_count}</Badge>}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {conv.telegram_user_name ? `@${conv.telegram_user_name}` : "No username"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">{new Date(conv.created_at).toLocaleDateString()}</p>
-                </div>
-              </div>
+        <button
+          key={conv.id}
+          onClick={() => onSelectConversation?.(conv.id)}
+          className={cn(
+            "w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3",
+            selectedId === conv.id ? "bg-primary/10 border-l-2 border-l-primary" : "hover:bg-muted",
+          )}
+        >
+          {/* Avatar */}
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/20 flex-shrink-0 mt-0.5">
+            <User size={18} className="text-primary" />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-sm truncate">{conv.first_name}</h3>
+              {conv.unread_count && conv.unread_count > 0 && (
+                <Badge variant="default" className="text-xs">
+                  {conv.unread_count}
+                </Badge>
+              )}
             </div>
-          </Card>
-        </Link>
+            <p className="text-xs text-muted-foreground truncate">
+              {conv.telegram_user_name ? `@${conv.telegram_user_name}` : "No username"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate mt-1">{lastMessages[conv.id] || "No messages yet"}</p>
+          </div>
+        </button>
       ))}
     </div>
   )
